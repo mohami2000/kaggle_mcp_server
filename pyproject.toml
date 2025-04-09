@@ -1,0 +1,24 @@
+[project]
+name = "my-mcp"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13" # Note: >=3.8 or >=3.9 might offer broader compatibility if needed
+dependencies = [
+    # Existing dependencies (keep if needed for other project parts)
+    "jax>=0.5.3",
+    "keras-hub>=0.19.0",
+
+    # MCP library (covers server/client core, types, stdio)
+    "mcp[cli]>=1.6.0",
+
+    # Added for the Kaggle Competition Server script
+    "pandas>=1.5.0", # Or specify a newer version if required. Needed for CSV handling.
+    "pydantic>=2.0.0", # Needed for data validation/models used by MCP.
+    "kagglehub>=0.2.0", # Needed for the data download setup step.
+]
+
+# Optional: Add project URLs, author info etc.
+# [project.urls]
+# homepage = "..."
+# repository = "..."
