@@ -14,21 +14,16 @@ is available locally.
 
 import asyncio
 from typing import Optional, List, Dict, Any
-import httpx # Keep httpx if you might add live API calls later, otherwise optional
-import os
-import re
 import json
 import pandas as pd
 from pathlib import Path
 
-# Assuming mcp library structure is similar
 from mcp.server.models import InitializationOptions 
 import mcp.types as types
 from mcp.server import NotificationOptions, Server
-from pydantic import AnyUrl, BaseModel, Field # Using Field for better schema definition
+from pydantic import AnyUrl, BaseModel, Field
 import mcp.server.stdio
 
-# --- Data Handling for Kaggle Competitions ---
 
 class KaggleCompetitionData:
     """Handles loading and querying Kaggle competition data from CSV."""
@@ -46,7 +41,6 @@ class KaggleCompetitionData:
                 "Download it from kaggle/meta-kaggle dataset."
             )
         try:
-            # Load only potentially useful columns to save memory
             columns_to_use = [
                 "Id", "Title", "Subtitle", "HostSegmentTitle", 
                 "ForumId", "OrganizationId", "EnabledDate", "DeadlineDate", 
@@ -56,10 +50,8 @@ class KaggleCompetitionData:
             ]
             self.competitions_df = pd.read_csv(self.csv_path, usecols=columns_to_use)
             
-            # Convert NaNs to None for better JSON serialization
             self.competitions_df = self.competitions_df.where(pd.notnull(self.competitions_df), None)
             
-            # Create a dictionary for quick ID lookup
             self.competitions_by_id = {
                 row['Id']: row.to_dict() 
                 for _, row in self.competitions_df.iterrows()
@@ -68,10 +60,8 @@ class KaggleCompetitionData:
             
         except Exception as e:
             print(f"Error loading competition data from {self.csv_path}: {e}")
-            # Continue with empty data if loading fails, or raise an error
             self.competitions_df = pd.DataFrame() 
             self.competitions_by_id = {}
-            # Or raise RuntimeError(f"Failed to load competition data: {e}")
 
     async def get_competition_info(self, competition_id: int) -> Optional[Dict[str, Any]]:
         """Get details for a specific competition by its ID."""
@@ -86,8 +76,6 @@ class KaggleCompetitionData:
         if not query:
             return []
 
-        # Search in Title and Subtitle (case-insensitive)
-        # Make sure columns exist and handle potential None values
         title_matches = self.competitions_df[
             self.competitions_df['Title'].str.lower().str.contains(query, na=False)
         ]
@@ -95,10 +83,8 @@ class KaggleCompetitionData:
             self.competitions_df['Subtitle'].str.lower().str.contains(query, na=False)
         ]
         
-        # Combine results, drop duplicates, take top N
         results = pd.concat([title_matches, subtitle_matches]).drop_duplicates(subset=['Id'])
         
-        # Return basic info for search results
         search_results = results.head(max_results)[['Id', 'Title', 'Subtitle']].to_dict('records')
         return search_results
 
@@ -107,7 +93,6 @@ class CompetitionState:
     """Manages competition data access."""
     def __init__(self, csv_path: str = "Competitions.csv"):
         self.data_handler = KaggleCompetitionData(csv_path=csv_path)
-        # Could add caching logic here if data source were dynamic
 
     async def get_info(self, competition_id: int) -> Optional[Dict[str, Any]]:
         """Get competition info."""
@@ -119,9 +104,6 @@ class CompetitionState:
 
 
 # --- MCP Server Setup ---
-
-# Initialize server and state
-# !! Ensure Competitions.csv is in the current directory or provide the correct path !!
 COMPETITION_CSV_PATH = "Competitions.csv" 
 server = Server("kaggle-competition-viewer")
 try:
@@ -129,14 +111,10 @@ try:
 except FileNotFoundError as e:
     print(f"Fatal Error: {e}")
     print("Please ensure 'Competitions.csv' is available.")
-    exit(1) # Exit if data can't be loaded
+    exit(1)
 
 
 # --- MCP Handlers ---
-
-# Optional: Implement resource listing if needed, similar to the original example
-# @server.list_resources() ...
-# @server.read_resource() ...
 
 
 @server.list_tools()
@@ -152,7 +130,7 @@ async def handle_list_tools() -> list[types.Tool]:
                     "competition_id": {
                         "type": "integer",
                         "description": "The numeric ID of the Kaggle competition (e.g., found via search).",
-                        "examples": [3973, 5370] # Example competition IDs
+                        "examples": [3973, 5370]
                     }
                 },
                 "required": ["competition_id"],
@@ -202,7 +180,6 @@ async def handle_call_tool(
 
         info = await state.get_info(competition_id)
         if info:
-            # Convert numpy types (if any remain) to standard Python types for JSON
             serializable_info = {k: (int(v) if isinstance(v, pd.np.integer) else
                                      float(v) if isinstance(v, pd.np.floating) else 
                                      v) 
@@ -210,7 +187,7 @@ async def handle_call_tool(
             return [
                 types.TextContent(
                     type="text",
-                    text=json.dumps(serializable_info, indent=2, default=str) # Use default=str for safety
+                    text=json.dumps(serializable_info, indent=2, default=str) 
                 )
             ]
         else:
@@ -252,8 +229,6 @@ async def handle_call_tool(
             ]
 
     else:
-        # Using ValueError for unknown tool as per MCP convention (or return specific error content)
-        # raise ValueError(f"Unknown tool: {name}") 
          return [
             types.TextContent(
                 type="text",
@@ -261,13 +236,6 @@ async def handle_call_tool(
             )
         ]
 
-
-# Optional: Implement prompt handling if needed
-# @server.list_prompts() ...
-# @server.get_prompt() ...
-
-
-# --- Main Execution Logic ---
 
 async def main():
     """Run the server using stdin/stdout streams."""
@@ -277,7 +245,7 @@ async def main():
             read_stream,
             write_stream,
             InitializationOptions(
-                server_name="kaggle-competition-viewer", # Updated server name
+                server_name="kaggle-competition-viewer",
                 server_version="0.1.0",
                 capabilities=server.get_capabilities(
                     notification_options=NotificationOptions(),
@@ -288,8 +256,4 @@ async def main():
     print("Kaggle Competition Viewer MCP Server stopped.")
 
 if __name__ == "__main__":
-    # Before running, ensure 'Competitions.csv' is in the correct location.
-    # You might need to download it:
-    # 1. Install kagglehub: pip install kagglehub
-    # 2. Download: kagglehub dataset download kaggle/meta-kaggle -f Competitions.csv -p .
     asyncio.run(main())
